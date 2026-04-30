@@ -1,35 +1,31 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FloatingTabBar } from '@/components/navigation/FloatingTabBar';
+import { PromoFab } from '@/components/storefront/PromoFab';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { t } = useTranslation();
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          // Hide the default chrome — `tabBar` below renders the
+          // floating glass pill that respects safe-area insets.
+          tabBarStyle: { display: 'none' },
         }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+        tabBar={(props) => <FloatingTabBar {...props} />}
+      >
+        <Tabs.Screen name="index"   options={{ title: t('tabs.home') }} />
+        <Tabs.Screen name="explore" options={{ title: t('tabs.shop') }} />
+        <Tabs.Screen name="orders"  options={{ title: t('tabs.orders') }} />
+        <Tabs.Screen name="profile" options={{ title: t('tabs.profile') }} />
+      </Tabs>
+      <PromoFab />
+    </View>
   );
 }
