@@ -34,6 +34,7 @@
 import { listHeroSlides } from '@/services/heroSlides';
 import { listCategories } from '@/services/categories';
 import { listFeaturedProducts } from '@/services/products';
+import { getUserPreferences } from '@/services/userPreferences';
 
 const PRELOAD_TIMEOUT_MS = 1800;
 
@@ -44,24 +45,32 @@ export function preloadHomeData(): Promise<void> {
   if (_promise) return _promise;
   _started = true;
 
-  const tasks: Promise<unknown>[] = [
-    listHeroSlides('main').catch(() => null),
-    listCategories(true).catch(() => null),
-    listFeaturedProducts(8).catch(() => null),
-  ];
+  // Phase Final-2 — Data saver mode: skip the heavy preload entirely
+  // when the user has opted into low-bandwidth mode. Their first paint
+  // on Home will hit the network normally (with proper loading
+  // skeletons), but we don't waste bytes prefetching three feeds
+  // they may never see.
+  _promise = (async () => {
+    const prefs = await getUserPreferences();
+    if (prefs.data_saver_mode) {
+      return; // resolve immediately, no fetches fire
+    }
 
-  // Wrap in a timeout so a slow network never blocks the boot.
-  // We don't `Promise.race` because we still want the in-flight
-  // requests to populate the cache when they finish — we just don't
-  // want to *wait* on them past 1.8 s.
-  const timeout = new Promise<void>((resolve) => {
-    setTimeout(resolve, PRELOAD_TIMEOUT_MS);
-  });
+    const tasks: Promise<unknown>[] = [
+      listHeroSlides('main').catch(() => null),
+      listCategories(true).catch(() => null),
+      listFeaturedProducts(8).catch(() => null),
+    ];
 
-  _promise = Promise.race([
-    Promise.allSettled(tasks).then(() => {}),
-    timeout,
-  ]);
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(resolve, PRELOAD_TIMEOUT_MS);
+    });
+
+    await Promise.race([
+      Promise.allSettled(tasks).then(() => {}),
+      timeout,
+    ]);
+  })();
 
   return _promise;
 }

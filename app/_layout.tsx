@@ -244,6 +244,10 @@ export default function RootLayout() {
             name="settings/dark-mode"
             options={{ headerShown: false, presentation: 'card', headerBackTitle: 'Retour' }}
           />
+          <Stack.Screen
+            name="settings/video-preferences"
+            options={{ headerShown: false, presentation: 'card', headerBackTitle: 'Retour' }}
+          />
         </Stack>
         <CartFab />
         <DrawerMenu />

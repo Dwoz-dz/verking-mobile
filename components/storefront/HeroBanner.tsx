@@ -34,6 +34,7 @@ import {
 import { Brand, Radius, Spacing } from '@/constants/theme';
 import { pickLocalized } from '@/i18n/pickLocalized';
 import { useDirection } from '@/i18n/useDirection';
+import { useUserPreferences } from '@/services/userPreferences';
 import type { HeroSlideRow } from '@/types/database';
 
 /**
@@ -70,6 +71,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export function HeroBanner({ slides }: HeroBannerProps) {
   const { t } = useTranslation();
+  // Phase Final-2 — data-saver mode disables auto-rotation so we don't
+  // burn through the user's data quota fetching the next slide's image
+  // every 5 s while they read the current one.
+  const prefs = useUserPreferences();
   const data = useMemo(
     () => (slides.length > 0 ? slides : ([null] as (HeroSlideRow | null)[])),
     [slides],
@@ -81,6 +86,7 @@ export function HeroBanner({ slides }: HeroBannerProps) {
 
   useEffect(() => {
     if (data.length <= 1) return;
+    if (prefs.data_saver_mode) return;
     const id = setInterval(() => {
       setIndex((i) => {
         const next = (i + 1) % data.length;
@@ -89,7 +95,7 @@ export function HeroBanner({ slides }: HeroBannerProps) {
       });
     }, 5000);
     return () => clearInterval(id);
-  }, [data.length, slideWidth]);
+  }, [data.length, slideWidth, prefs.data_saver_mode]);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.round(e.nativeEvent.contentOffset.x / slideWidth);

@@ -37,6 +37,7 @@ import { useDirection } from '@/i18n/useDirection';
 import { setLanguage, type AppLocale } from '@/i18n';
 import { canReload, safeReload } from '@/lib/safeReload';
 import { supabase } from '@/lib/supabase/client';
+import { openStoreRating } from '@/lib/openStoreRating';
 import { openEmail, openPhone, openWhatsApp } from '@/services/contact';
 import { useDefaultWilaya } from '@/services/mobileConfig';
 import { setPreference, useUserPreferences } from '@/services/userPreferences';
@@ -82,10 +83,15 @@ const FALLBACK_SCHEMA: SchemaGroup[] = [
     { key: 'recently_viewed',  type: 'link',   icon: 'time',          label_fr: 'Articles vus récemment', label_ar: 'عرضت مؤخراً',      is_visible: true },
     { key: 'clear_cache',      type: 'link',   icon: 'trash',         label_fr: 'Vider le cache',         label_ar: 'مسح الذاكرة المؤقتة', is_visible: true },
     { key: 'data_saver',       type: 'toggle', icon: 'speedometer',   label_fr: 'Mode économie de données', label_ar: 'وضع توفير البيانات', is_visible: true },
+    { key: 'video_preferences',type: 'link',   icon: 'play-circle',   label_fr: 'Préférences vidéo',      label_ar: 'تفضيلات الفيديو',  is_visible: true },
   ]},
   { group_key: 'support',       group_label_fr: 'Support & À propos',      group_label_ar: 'الدعم والمعلومات', group_label_en: 'Support & About', is_visible: true, sort_order: 5, items: [
-    { key: 'contact_wa', type: 'link', icon: 'logo-whatsapp', label_fr: 'Contacter via WhatsApp', label_ar: 'التواصل عبر واتساب', is_visible: true },
-    { key: 'about',      type: 'link', icon: 'information-circle', label_fr: 'À propos', label_ar: 'حول التطبيق', is_visible: true },
+    { key: 'help_center', type: 'link', icon: 'help-circle',        label_fr: 'Centre d\'aide',         label_ar: 'مركز المساعدة',     is_visible: true },
+    { key: 'contact_wa',  type: 'link', icon: 'logo-whatsapp',      label_fr: 'Contacter via WhatsApp', label_ar: 'التواصل عبر واتساب', is_visible: true },
+    { key: 'rating',      type: 'link', icon: 'star',                label_fr: 'Avis sur Verking',       label_ar: 'تقييم فيركينج',     is_visible: true },
+    { key: 'about',       type: 'link', icon: 'information-circle', label_fr: 'À propos',              label_ar: 'حول التطبيق',       is_visible: true },
+    { key: 'privacy',     type: 'link', icon: 'shield-checkmark',   label_fr: 'Confidentialité',       label_ar: 'الخصوصية',         is_visible: true },
+    { key: 'terms',       type: 'link', icon: 'document-text',      label_fr: 'Conditions',            label_ar: 'الشروط',           is_visible: true },
   ]},
 ];
 
@@ -200,10 +206,15 @@ export default function SettingsScreen() {
       case 'terms':
         router.push('/info/terms' as never);
         break;
+      // Phase Final-2 — Préférences vidéo + Avis sur Verking + Rating
+      case 'video_preferences':
+      case 'preferences_video':
+        router.push('/settings/video-preferences' as never);
+        break;
       case 'rating':
-        // Opens the device's app store listing (filled in Phase 3.5
-        // when we add the platform-specific deeplinks).
-        Alert.alert(t('settings.soon_toast'));
+      case 'rate_app':
+      case 'avis':
+        void openStoreRating();
         break;
       case 'clear_cache':
         Alert.alert(
