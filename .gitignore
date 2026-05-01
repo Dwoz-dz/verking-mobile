@@ -43,3 +43,11 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Internal session / tool state — never push
+.claude/
+supabase/.temp/
+
+# Build artifacts that occasionally land at the root
+build/
+.eas/
