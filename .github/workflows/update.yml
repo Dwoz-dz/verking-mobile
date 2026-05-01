@@ -1,15 +1,5 @@
 name: Auto OTA Update
 
-# Triggers an Expo `eas update` push every time `main` advances. The
-# Expo bundler runs on Ubuntu, builds the JS bundle for the production
-# branch, and ships it through the project's update channel — no app
-# store submission needed.
-#
-# Required GitHub Secret: EXPO_TOKEN (Personal Access Token from
-# https://expo.dev/settings/access-tokens with at least "Update"
-# scope on the project). The workflow fails fast if it's missing
-# rather than producing a confusing error mid-bundle.
-
 on:
   push:
     branches:
@@ -20,32 +10,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Clone repo
       - uses: actions/checkout@v3
 
+      # 2. Node 20 (مهم)
       - uses: actions/setup-node@v3
         with:
           node-version: 20
           cache: 'npm'
 
-      - run: npm install
+      # 3. Install deps
+      - name: Install dependencies
+        run: npm install
 
-      - name: Install Expo
+      # 4. Install Expo + EAS CLI
+      - name: Install Expo CLI
         run: npm install -g expo-cli eas-cli@latest
 
-      - name: Verify EXPO_TOKEN is present
-        # Fail fast with a clear message rather than letting `eas`
-        # report an obscure 401 mid-bundle.
+      # 5. Verify secrets (مهم جداً)
+      - name: Verify required secrets
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::EXPO_TOKEN secret is missing. Add it under Settings → Secrets → Actions."
+            echo "::error::EXPO_TOKEN is missing"
+            exit 1
+          fi
+          if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ]; then
+            echo "::error::EXPO_PUBLIC_SUPABASE_URL is missing"
+            exit 1
+          fi
+          if [ -z "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY is missing"
             exit 1
           fi
 
-      - name: Run update
-        # CI=1 forces the Expo CLIs into non-interactive mode so they
-        # never wait on stdin (which would hang the runner forever).
+      # 6. Run OTA update 🚀
+      - name: Run OTA update
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: CI=1 npx eas update --branch production --message "auto update from ${{ github.sha }}"
