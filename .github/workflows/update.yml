@@ -1,5 +1,15 @@
 name: Auto OTA Update
 
+# Triggers an Expo `eas update` push every time `main` advances. The
+# Expo bundler runs on Ubuntu, builds the JS bundle for the production
+# branch, and ships it through the project's update channel — no app
+# store submission needed.
+#
+# Required GitHub Secret: EXPO_TOKEN (Personal Access Token from
+# https://expo.dev/settings/access-tokens with at least "Update"
+# scope on the project). The workflow fails fast if it's missing
+# rather than producing a confusing error mid-bundle.
+
 on:
   push:
     branches:
@@ -14,14 +24,28 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 20
+          cache: 'npm'
 
       - run: npm install
 
       - name: Install Expo
         run: npm install -g expo-cli eas-cli@latest
 
-      - name: Run update
+      - name: Verify EXPO_TOKEN is present
+        # Fail fast with a clear message rather than letting `eas`
+        # report an obscure 401 mid-bundle.
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas update --branch production --message "auto update"
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret is missing. Add it under Settings → Secrets → Actions."
+            exit 1
+          fi
+
+      - name: Run update
+        # CI=1 forces the Expo CLIs into non-interactive mode so they
+        # never wait on stdin (which would hang the runner forever).
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: CI=1 npx eas update --branch production --message "auto update from ${{ github.sha }}"
