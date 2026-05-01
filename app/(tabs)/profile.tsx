@@ -46,6 +46,7 @@ import { Brand, BrandFont, Radius, Spacing } from '@/constants/theme';
 import { useBottomContentClearance } from '@/constants/layout';
 import { usePullRefresh } from '@/hooks/usePullRefresh';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
+import { reportScrollY } from '@/lib/ui/fabVisibility';
 import { useDirection } from '@/i18n/useDirection';
 import { getDeviceId } from '@/lib/deviceId';
 import { useThemedBrand } from '@/lib/theme/ThemeContext';
@@ -152,6 +153,9 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomClearance }]}
         showsVerticalScrollIndicator={false}
+        // Phase Final — drive FAB auto-hide.
+        onScroll={(e) => reportScrollY(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -191,13 +195,11 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* ─── 3. Quick Stats Row ─────────────────────────────────────── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsRow}
-          style={{ marginTop: Spacing.md }}
-        >
+        {/* ─── 3. Quick Stats — Phase Final: 2-row grid (was horizontal
+            scroll where the 5th card "Favoris" got cut off as
+            "Fa..."). 5 cards → 3 + 2 layout, every label fully
+            readable. */}
+        <View style={styles.statsGrid}>
           <StatCard
             emoji="📦"
             color={Brand.primary}
@@ -233,7 +235,10 @@ export default function ProfileScreen() {
             label={t('profile.stats.streak', { defaultValue: 'Jours' })}
             onPress={() => { /* no-op — already on profile */ }}
           />
-        </ScrollView>
+        </View>
+
+        {/* Section divider — Phase Final */}
+        <View style={styles.sectionDivider} />
 
         {/* ─── 4. Action Grid 2×3 ─────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { textAlign, color: themed.text }]}>
@@ -658,9 +663,29 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.32)',
   },
 
+  // Phase Final — 2-row flex grid (was horizontal ScrollView). 5 cards
+  // wrap into a 3-col first row + 2-col second row, every label fully
+  // visible (no more "Fa..." truncation seen in PTP-N49 screenshots).
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+  },
   statsRow: { paddingHorizontal: Spacing.md, gap: Spacing.xs, paddingVertical: 4 },
+  // Soft divider between the major sections of the Profile tab.
+  sectionDivider: {
+    height: 1,
+    backgroundColor: Brand.border,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.lg,
+    opacity: 0.5,
+  },
   statCard: {
-    width: 96, padding: 12,
+    flexBasis: '31.5%',
+    flexGrow: 1,
+    padding: 12,
     borderRadius: Radius.lg, borderWidth: 1,
     alignItems: 'center', gap: 2,
   },

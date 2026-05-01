@@ -25,7 +25,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -40,6 +39,7 @@ import { AppliedCouponBanner } from '@/components/cart/AppliedCouponBanner';
 import { useCartActions, useCartLines, useCartTotals } from '@/components/cart/CartProvider';
 import { BrandWallpaper } from '@/components/decorative/BrandWallpaper';
 import { TrustStrip } from '@/components/storefront/TrustStrip';
+import { BrandConfirmDialog } from '@/components/ui/BrandConfirmDialog';
 import { Brand, BrandFont, Radius, Spacing } from '@/constants/theme';
 import { pickLocalized } from '@/i18n/pickLocalized';
 import { useDirection } from '@/i18n/useDirection';
@@ -118,16 +118,15 @@ export default function CartScreen() {
 
   const locale = i18n.language as 'fr' | 'ar' | 'en';
 
+  // Phase Final — branded confirm dialog instead of OS Alert.
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const onClear = () => {
     if (lines.length === 0) return;
-    Alert.alert(
-      t('cart.clear_confirm_title'),
-      t('cart.clear_confirm_body'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('cart.clear_confirm'), style: 'destructive', onPress: () => clear() },
-      ],
-    );
+    setConfirmClearOpen(true);
+  };
+  const onClearConfirm = () => {
+    setConfirmClearOpen(false);
+    clear();
   };
 
   const onWhatsApp = async () => {
@@ -324,6 +323,17 @@ export default function CartScreen() {
           </Pressable>
         ) : null}
       </SafeAreaView>
+
+      {/* Phase Final — branded clear-cart confirmation. */}
+      <BrandConfirmDialog
+        visible={confirmClearOpen}
+        title={t('cart.clear_confirm_title')}
+        message={t('cart.clear_confirm_body')}
+        confirmLabel={t('cart.clear_confirm')}
+        destructive
+        onConfirm={onClearConfirm}
+        onCancel={() => setConfirmClearOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -551,6 +561,7 @@ function EmptyCart({
           </Text>
         </View>
       </View>
+
     </SafeAreaView>
   );
 }

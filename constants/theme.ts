@@ -109,9 +109,23 @@ export const Spacing = {
  * @expo-google-fonts/plus-jakarta-sans. Reference them via
  * `fontFamily: BrandFont.bold` in style props so we can swap the brand
  * font globally from one place.
+ *
+ * Phase Final — Arabic-glyph fallback:
+ *   Plus Jakarta Sans renders Arabic via the platform fallback chain,
+ *   which on Android picks Noto Sans Arabic (decent) and on iOS picks
+ *   the system Arabic face (Geeza Pro / SF Arabic). For our brand we
+ *   prefer a slightly more humanist face. Use `arabicFamily` whenever
+ *   text is known to be RTL/AR — keeps the visual identity even when
+ *   Plus Jakarta isn't doing the heavy lifting.
  */
 export const BrandFont = {
   fallback: (Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' }) ?? 'sans-serif'),
+  /** Prefer this when you know the text is Arabic (RTL). */
+  arabicFamily: Platform.select({
+    ios: 'Geeza Pro',          // shipped with iOS
+    android: 'sans-serif',     // Android falls back to Noto Sans Arabic via this family
+    default: 'sans-serif',
+  }) ?? 'sans-serif',
   regular: 'PlusJakartaSans_400Regular',
   medium: 'PlusJakartaSans_500Medium',
   semibold: 'PlusJakartaSans_600SemiBold',

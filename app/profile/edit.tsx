@@ -38,6 +38,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Brand, BrandFont, Radius, Spacing } from '@/constants/theme';
 import { useDirection } from '@/i18n/useDirection';
 import { bumpRefresh } from '@/lib/refresh/refreshBus';
+import { flashInfo } from '@/lib/ui/flash';
 import { updateMyProfile, useMyProfile } from '@/services/profile';
 
 export default function ProfileEditScreen() {
@@ -73,20 +74,22 @@ export default function ProfileEditScreen() {
         bio: bio.trim() || null,
       });
       if (!res.ok) {
-        Alert.alert(
-          t('profile_edit.save_failed_title', { defaultValue: 'Échec de l’enregistrement' }),
-          t('profile_edit.save_failed_body', {
+        flashInfo({
+          title: t('profile_edit.save_failed_title', { defaultValue: 'Échec de l’enregistrement' }),
+          body: t('profile_edit.save_failed_body', {
             defaultValue: 'Une erreur est survenue. Réessayez dans un instant.',
           }),
-        );
+        });
         return;
       }
       bumpRefresh(); // tell every dependent hook to refetch
-      Alert.alert(
-        t('profile_edit.save_ok_title', { defaultValue: '✅ Profil enregistré' }),
-        undefined,
-        [{ text: 'OK', onPress: () => router.back() }],
-      );
+      // Phase Final — friendlier success path: show a non-blocking toast
+      // and route back immediately. Old alert kept the user staring at
+      // the form until they tapped OK.
+      flashInfo({
+        title: t('profile_edit.save_ok_title', { defaultValue: '✅ Profil enregistré' }),
+      });
+      router.back();
     } finally {
       setSaving(false);
     }
@@ -95,12 +98,12 @@ export default function ProfileEditScreen() {
   const onAvatarTap = () => {
     // Phase 7 wires the camera/gallery picker. For now, friendly
     // "coming soon" message keeps the UI honest about what works today.
-    Alert.alert(
-      t('profile_edit.avatar_soon_title', { defaultValue: '📷 Photo de profil' }),
-      t('profile_edit.avatar_soon_body', {
+    flashInfo({
+      title: t('profile_edit.avatar_soon_title', { defaultValue: '📷 Photo de profil' }),
+      body: t('profile_edit.avatar_soon_body', {
         defaultValue: 'L’upload de photo arrive dans la prochaine version.',
       }),
-    );
+    });
   };
 
   return (

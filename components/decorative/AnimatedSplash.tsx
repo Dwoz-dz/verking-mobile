@@ -47,6 +47,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { preloadHomeData } from '@/lib/boot/preloadHomeData';
 import { useRegistrationStatus } from '@/services/registration';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -116,6 +117,14 @@ export function AnimatedSplash({
   hideGreeting = false,
   durationMs = TOTAL_DURATION_MS,
 }: AnimatedSplashProps) {
+  // Phase Final — kick off home-data prefetch the instant the splash
+  // mounts. Fire-and-forget: the call is idempotent (deduped via the
+  // module-level _promise inside preloadHomeData) so re-mounting the
+  // splash doesn't fan out duplicate requests. By the time the user
+  // lands on Home, the cache is already warm.
+  useEffect(() => {
+    void preloadHomeData();
+  }, []);
   const { status } = useRegistrationStatus();
   const greetingName = !hideGreeting && status.is_registered && status.name ? status.name.trim() : '';
 

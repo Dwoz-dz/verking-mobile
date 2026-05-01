@@ -15,12 +15,19 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { useCartTotals } from '@/components/cart/CartProvider';
 import { useFabBottomOffset } from '@/constants/layout';
+import { subscribeFabDirection, type ScrollDirection } from '@/lib/ui/fabVisibility';
 import {
   resolveFabLink,
   trackFabClick,
@@ -96,6 +103,24 @@ export function PromoFab({ screen: screenOverride }: PromoFabProps) {
   const { promo } = useFabPromo(ctx);
   useFabImpressionTracking(promo?.id);
 
+  // Phase Final — auto-hide on scroll-down (Instagram-style). Subscribes
+  // to the global fabVisibility bus; any ScrollView that calls
+  // `reportScrollY` will drive this animation.
+  const translateY = useSharedValue(0);
+  const [direction, setDirection] = useState<ScrollDirection>('idle');
+  useEffect(() => {
+    return subscribeFabDirection(setDirection);
+  }, []);
+  useEffect(() => {
+    translateY.value = withTiming(direction === 'down' ? 80 : 0, {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [direction, translateY]);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   if (!promo) return null;
 
   const label = isAr ? promo.label_ar : promo.label_fr;
@@ -111,9 +136,9 @@ export function PromoFab({ screen: screenOverride }: PromoFabProps) {
   };
 
   return (
-    <View
+    <Animated.View
       pointerEvents="box-none"
-      style={[styles.wrap, { bottom: fabBottom }]}
+      style={[styles.wrap, { bottom: fabBottom }, animatedStyle]}
     >
       <Pressable
         onPress={onPress}
@@ -132,7 +157,7 @@ export function PromoFab({ screen: screenOverride }: PromoFabProps) {
           {label}
         </Text>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 

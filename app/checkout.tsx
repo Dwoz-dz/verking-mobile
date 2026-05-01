@@ -37,11 +37,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppliedCoupon } from '@/components/cart/AppliedCouponContext';
 import { useCartActions, useCartLines } from '@/components/cart/CartProvider';
+import { BrandModal } from '@/components/ui/BrandModal';
 import { getDeviceId } from '@/lib/deviceId';
 import { Brand, BrandFont, Radius, Spacing } from '@/constants/theme';
 import { useDirection } from '@/i18n/useDirection';
 import { CURRENCY, formatPrice } from '@/lib/format';
 import type { CartLine } from '@/lib/cart';
+import { useMyAddresses, type AddressRow } from '@/services/addresses';
 import { createQuickOrder, type SaleMode } from '@/services/orders';
 import { pushLocalOrder } from '@/services/orderHistory';
 import {
@@ -147,6 +149,32 @@ export default function CheckoutScreen() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [whatsappPhone, setWhatsappPhone] = useState<string | null>(null);
+  // Phase Final — pull saved addresses so the user can autofill.
+  const { addresses: savedAddresses } = useMyAddresses();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Auto-fill once when the user lands on Checkout AND has a default
+  // saved. Keeps existing behaviour for people without saved addresses
+  // (they still see empty fields).
+  const [autoFilled, setAutoFilled] = useState(false);
+  useEffect(() => {
+    if (autoFilled) return;
+    if (savedAddresses.length === 0) return;
+    const def = savedAddresses.find((a) => a.is_default) ?? savedAddresses[0];
+    if (!def) return;
+    setName((cur) => cur || ''); // name is per-order, not the address label
+    setPhone((cur) => cur || def.phone);
+    setWilaya((cur) => cur || def.wilaya_code);
+    setAddress((cur) => cur || [def.address_line1, def.commune, def.landmark].filter(Boolean).join(' • '));
+    setAutoFilled(true);
+  }, [savedAddresses, autoFilled]);
+
+  const applyAddress = (addr: AddressRow) => {
+    setPhone(addr.phone);
+    setWilaya(addr.wilaya_code);
+    setAddress([addr.address_line1, addr.commune, addr.landmark].filter(Boolean).join(' • '));
+    if (addr.note) setNotes((cur) => cur || addr.note || '');
+    setPickerOpen(false);
+  };
 
   useEffect(() => {
     void (async () => setWhatsappPhone(await getWhatsAppNumber()))();
@@ -343,6 +371,38 @@ export default function CheckoutScreen() {
             </View>
           ) : null}
 
+          {/* Phase Final — saved addresses shortcut. When the user has
+              one or more saved (`/addresses` screen), we surface a
+              prominent "Use saved address" pill at the top of the form
+              so they don't have to retype anything. The default
+              address is already auto-filled below; this picker lets
+              them switch between saved entries. */}
+          {savedAddresses.length > 0 ? (
+            <Pressable
+              onPress={() => setPickerOpen(true)}
+              style={({ pressed }) => [
+                styles.savedAddressBtn,
+                pressed && { transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <Ionicons name="bookmark" size={16} color={Brand.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.savedAddressTitle, { textAlign }]}>
+                  {t('checkout.saved_addresses_cta', {
+                    defaultValue: 'Mes adresses enregistrées',
+                  })}
+                </Text>
+                <Text style={[styles.savedAddressHint, { textAlign }]} numberOfLines={1}>
+                  {t('checkout.saved_addresses_hint', {
+                    count: savedAddresses.length,
+                    defaultValue: '{{count}} adresse(s) — appuyez pour choisir',
+                  })}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Brand.textMuted} />
+            </Pressable>
+          ) : null}
+
           <Field label={t('checkout.field_name')} value={name} onChangeText={setName} placeholder={t('checkout.field_name_ph')} textAlign={textAlign} />
           <Field label={t('checkout.field_phone')} value={phone} onChangeText={setPhone} placeholder={t('checkout.field_phone_ph')} keyboardType="phone-pad" textAlign={textAlign} />
           <Field label={t('checkout.field_wilaya')} value={wilaya} onChangeText={setWilaya} placeholder={t('checkout.field_wilaya_ph')} textAlign={textAlign} />
@@ -368,6 +428,59 @@ export default function CheckoutScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Phase Final — Address picker modal. */}
+      <BrandModal visible={pickerOpen} onClose={() => setPickerOpen(false)}>
+        <BrandModal.Header
+          emoji="📍"
+          title={t('checkout.pick_address_title', { defaultValue: 'Choisir une adresse' })}
+        />
+        <BrandModal.Body>
+          <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+            {savedAddresses.map((addr) => (
+              <Pressable
+                key={addr.id}
+                onPress={() => applyAddress(addr)}
+                style={({ pressed }) => [
+                  styles.pickerRow,
+                  pressed && { backgroundColor: Brand.surfaceMuted },
+                  addr.is_default && styles.pickerRowDefault,
+                ]}
+              >
+                <Text style={styles.pickerEmoji}>{addr.emoji ?? '🏠'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.pickerLabel, { textAlign }]} numberOfLines={1}>
+                    {addr.label}
+                    {addr.is_default ? ' ⭐' : ''}
+                  </Text>
+                  <Text style={[styles.pickerSub, { textAlign }]} numberOfLines={2}>
+                    {addr.address_line1}
+                  </Text>
+                  <Text style={[styles.pickerSub, { textAlign }]} numberOfLines={1}>
+                    {addr.wilaya_code} • 📞 {addr.phone}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={Brand.textMuted} />
+              </Pressable>
+            ))}
+            <Pressable
+              onPress={() => {
+                setPickerOpen(false);
+                router.push('/addresses' as never);
+              }}
+              style={({ pressed }) => [
+                styles.pickerAddRow,
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <Ionicons name="add-circle" size={18} color={Brand.cta} />
+              <Text style={styles.pickerAddText}>
+                {t('checkout.pick_address_add', { defaultValue: '+ Ajouter une nouvelle adresse' })}
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </BrandModal.Body>
+      </BrandModal>
     </SafeAreaView>
   );
 }
@@ -475,4 +588,79 @@ const styles = StyleSheet.create({
   },
   whatsappText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
   whatsappHint: { color: Brand.textMuted, fontSize: 12, textAlign: 'center', fontStyle: 'italic' },
+
+  // Phase Final — saved addresses shortcut + picker modal styles.
+  savedAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: Radius.lg,
+    backgroundColor: Brand.primaryTint,
+    borderWidth: 1,
+    borderColor: Brand.primary + '33',
+    marginBottom: Spacing.sm,
+  },
+  savedAddressTitle: {
+    fontFamily: BrandFont.extrabold,
+    fontWeight: '900',
+    fontSize: 13,
+    color: Brand.primary,
+    letterSpacing: -0.1,
+  },
+  savedAddressHint: {
+    fontFamily: BrandFont.medium,
+    fontWeight: '600',
+    fontSize: 11,
+    color: Brand.textMuted,
+    marginTop: 1,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Brand.border,
+    backgroundColor: Brand.surface,
+    marginBottom: 6,
+  },
+  pickerRowDefault: {
+    borderColor: Brand.cta + '55',
+    backgroundColor: Brand.ctaSoft + '40',
+  },
+  pickerEmoji: { fontSize: 22 },
+  pickerLabel: {
+    fontFamily: BrandFont.extrabold,
+    fontWeight: '900',
+    fontSize: 13,
+    color: Brand.text,
+  },
+  pickerSub: {
+    fontFamily: BrandFont.medium,
+    fontWeight: '500',
+    fontSize: 11,
+    color: Brand.textMuted,
+    marginTop: 2,
+  },
+  pickerAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 4,
+    borderRadius: Radius.md,
+    backgroundColor: Brand.ctaSoft,
+    borderWidth: 1,
+    borderColor: Brand.cta + '33',
+  },
+  pickerAddText: {
+    fontFamily: BrandFont.bold,
+    fontWeight: '800',
+    fontSize: 13,
+    color: Brand.ctaDeep,
+  },
 });

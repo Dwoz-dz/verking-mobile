@@ -53,12 +53,14 @@ import { WhatsAppContactBlock } from '@/components/storefront/WhatsAppContactBlo
 import { WhyVerkingBlock } from '@/components/storefront/WhyVerkingBlock';
 import { ThemeBackdrop } from '@/components/decorative/ThemeBackdrop';
 import { HamburgerButton } from '@/components/navigation/HamburgerButton';
+import { RailWithPlaceholders } from '@/components/storefront/RailWithPlaceholders';
 import { ComingSoonBanner } from '@/components/ui/ComingSoonBanner';
 import { ComingSoonCard } from '@/components/ui/ComingSoonCard';
 import { Brand, Radius, Spacing } from '@/constants/theme';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useDirection } from '@/i18n/useDirection';
 import { bumpRefresh } from '@/lib/refresh/refreshBus';
+import { reportScrollY } from '@/lib/ui/fabVisibility';
 import { useComingSoonConfig } from '@/services/comingSoonConfig';
 import { listCategories } from '@/services/categories';
 import { listHeroSlides } from '@/services/heroSlides';
@@ -168,6 +170,9 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.primary} />}
         showsVerticalScrollIndicator={false}
+        // Phase Final — drive the FAB auto-hide bus.
+        onScroll={(e) => reportScrollY(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
       >
         {loading ? (
           <LoadingState style={{ paddingVertical: 80 }} />
@@ -329,59 +334,62 @@ export default function HomeScreen() {
               <PromoSlot slot="wholesale" variant="card" fallbackTone="mint" />
             </View>
 
-            {/* Spécial Gros */}
-            {data.wholesale.length > 0 ? (
-              <View style={styles.section}>
-                <View style={styles.grosBanner}>
-                  <View style={styles.grosBannerDot} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.grosBannerTitle, { textAlign }]}>{t('home.section_wholesale')}</Text>
-                    <Text style={[styles.grosBannerSub, { textAlign }]}>{t('home.section_wholesale_sub')}</Text>
-                  </View>
+            {/* Spécial Gros — Phase Final: rail filled with placeholders
+                when admin has fewer than min_grid_slots wholesale items
+                seeded. Stops the section from disappearing entirely
+                while we're ramping up the catalogue. */}
+            <View style={styles.section}>
+              <View style={styles.grosBanner}>
+                <View style={styles.grosBannerDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.grosBannerTitle, { textAlign }]}>{t('home.section_wholesale')}</Text>
+                  <Text style={[styles.grosBannerSub, { textAlign }]}>{t('home.section_wholesale_sub')}</Text>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                  {data.wholesale.map((p) => (
-                    <ProductCard key={p.id} product={p} category={catFor(p)} />
-                  ))}
-                </ScrollView>
               </View>
-            ) : null}
+              <RailWithPlaceholders
+                items={data.wholesale}
+                renderItem={(p) => <ProductCard product={p} category={catFor(p)} />}
+                keyExtractor={(p) => p.id}
+                locale={i18n.language === 'ar' ? 'ar' : 'fr'}
+                bucketKey="wholesale"
+              />
+            </View>
 
             {/* Coups de cœur */}
-            {data.featured.length > 0 ? (
-              <View style={styles.section}>
-                <SectionHeader
-                  title={t('home.section_featured')}
-                  subtitle={t('home.section_featured_sub')}
-                  href="/(tabs)/explore"
-                />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                  {data.featured.map((p) => (
-                    <ProductCard key={p.id} product={p} category={catFor(p)} />
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
+            <View style={styles.section}>
+              <SectionHeader
+                title={t('home.section_featured')}
+                subtitle={t('home.section_featured_sub')}
+                href="/(tabs)/explore"
+              />
+              <RailWithPlaceholders
+                items={data.featured}
+                renderItem={(p) => <ProductCard product={p} category={catFor(p)} />}
+                keyExtractor={(p) => p.id}
+                locale={i18n.language === 'ar' ? 'ar' : 'fr'}
+                bucketKey="featured"
+              />
+            </View>
 
             {/* Vu récemment — quietly skipped when fewer than 2 items.
                 Re-hydrated on focus so it picks up new viewings. */}
             <RecentlyViewedRail minToShow={2} limit={10} />
 
-            {/* Recommandés */}
-            {data.recommended.length > 0 ? (
-              <View style={styles.section}>
-                <SectionHeader
-                  title={t('home.section_recommended')}
-                  subtitle={t('home.section_recommended_sub')}
-                  href="/(tabs)/explore"
-                />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                  {data.recommended.map((p) => (
-                    <ProductCard key={p.id} product={p} category={catFor(p)} />
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
+            {/* Recommandés — also placeholder-filled. */}
+            <View style={styles.section}>
+              <SectionHeader
+                title={t('home.section_recommended')}
+                subtitle={t('home.section_recommended_sub')}
+                href="/(tabs)/explore"
+              />
+              <RailWithPlaceholders
+                items={data.recommended}
+                renderItem={(p) => <ProductCard product={p} category={catFor(p)} />}
+                keyExtractor={(p) => p.id}
+                locale={i18n.language === 'ar' ? 'ar' : 'fr'}
+                bucketKey="recommended"
+              />
+            </View>
 
             {/* Slot: footer promo */}
             <View style={styles.slotSpaced}>
