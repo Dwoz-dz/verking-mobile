@@ -74,7 +74,26 @@ export interface BestCouponResponse {
 interface OkBody { ok: true; [k: string]: unknown }
 interface ErrBody { ok: false; code: string; error: string }
 
+// Soft error class so callers can decide whether the 401/4xx is
+// actually worth surfacing. Cold-start blips on the gateway and missing
+// device records both produce noisy logs that aren't actionable.
+class TransientApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = 'TransientApiError';
+  }
+}
+
 async function callPublic<T extends OkBody>(route: string, body: unknown): Promise<T> {
+  // Audit fix: explicit env-var guard. If the bundle was built
+  // without EXPO_PUBLIC_SUPABASE_ANON_KEY (broken CI, missing .env),
+  // the previous code sent `Bearer ` (empty) which 401s at the
+  // gateway with a confusing log. Fail fast with a clear message.
+  if (!ANON_KEY || !process.env.EXPO_PUBLIC_SUPABASE_URL) {
+    throw new Error('Supabase env not configured (anon key missing).');
+  }
   const res = await fetch(`${FUNCTIONS_BASE}/${route}`, {
     method: 'POST',
     headers: {
@@ -84,15 +103,16 @@ async function callPublic<T extends OkBody>(route: string, body: unknown): Promi
     },
     body: JSON.stringify(body),
   });
-  let parsed: T | ErrBody;
+  let parsed: T | ErrBody | null = null;
   try {
     parsed = (await res.json()) as T | ErrBody;
   } catch {
-    throw new Error(`Réponse invalide (HTTP ${res.status}).`);
+    // Body wasn't JSON — likely a gateway-level 4xx/5xx with HTML/text body.
+    throw new TransientApiError(`Réponse invalide (HTTP ${res.status}).`, res.status);
   }
-  if (!res.ok || !('ok' in parsed) || !parsed.ok) {
-    const e = parsed as ErrBody;
-    throw new Error(e.error ?? `Échec (HTTP ${res.status}).`);
+  if (!res.ok || !parsed || !('ok' in parsed) || !parsed.ok) {
+    const e = parsed as ErrBody | null;
+    throw new TransientApiError(e?.error ?? `Échec (HTTP ${res.status}).`, res.status);
   }
   return parsed;
 }
@@ -160,7 +180,16 @@ export async function listMyCoupons(): Promise<UserCouponRow[]> {
     );
     return res.coupons ?? [];
   } catch (err) {
-    console.warn('[coupons] wallet fetch failed:', err);
+    // Audit fix: 401/transient errors are expected for guest devices
+    // before they've claimed any coupon (the route is rate-limited at
+    // the gateway level and may briefly cold-start). Don't pollute the
+    // logs with a warning for these — the empty array fallback is the
+    // correct UX. Real errors (5xx, malformed responses) still log.
+    if (err instanceof TransientApiError && (err.status === 401 || err.status === 404)) {
+      // silent: guest device with no coupons yet
+    } else {
+      console.warn('[coupons] wallet fetch failed:', err);
+    }
     return [];
   }
 }
