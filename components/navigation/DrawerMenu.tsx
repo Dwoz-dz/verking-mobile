@@ -152,13 +152,28 @@ export function DrawerMenu() {
     opacity: open.value * 0.6,
   }));
 
+  // CRITICAL: when the drawer is "closed" we translate it past the
+  // visible edge by DRAWER_W. But the sheet has shadowRadius:30 +
+  // elevation:24 — the shadow halo extends ~30 px BEYOND the sheet's
+  // bounds and bleeds back INTO the visible viewport, producing a faint
+  // dark sliver / vertical strip on the screen edge that users
+  // (correctly) read as "drawer is partially visible". Two fixes
+  // combined here:
+  //   1. Add `SHADOW_BUFFER` to the offscreen translation so the
+  //      shadow halo is also outside the viewport.
+  //   2. Drive `shadowOpacity` from `open.value` so when fully closed
+  //      the shadow contributes literally zero pixels.
+  const SHADOW_BUFFER = 60;
   const sheetStyle = useAnimatedStyle(() => {
-    const slidePx = interpolate(open.value, [0, 1], [DRAWER_W, 0]);
+    const slidePx = interpolate(open.value, [0, 1], [DRAWER_W + SHADOW_BUFFER, 0]);
     const dirSign = isRtl ? 1 : -1;
     return {
       transform: [
         { translateX: dirSign * slidePx + dragX.value },
       ],
+      // Scale the shadow with the open state so a closed drawer
+      // contributes literally no visual halo.
+      shadowOpacity: open.value,
     };
   });
 
@@ -220,8 +235,15 @@ export function DrawerMenu() {
   // ─── Render ─────────────────────────────────────────────────────────
   // Always render so close animations can play out; pointerEvents below
   // turns the whole tree non-interactive when closed.
+  // `overflow: 'hidden'` on the root wrapper clips any out-of-viewport
+  // bleed from the sheet (Android/Web shadow halos, gesture handler
+  // wrapper artefacts). iOS shadows aren't clipped by overflow, but
+  // that's already handled by SHADOW_BUFFER + animated shadowOpacity.
   return (
-    <View pointerEvents={isOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
+    <View
+      pointerEvents={isOpen ? 'auto' : 'none'}
+      style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
+    >
       {/* Backdrop */}
       <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={closeWithHaptic} />
@@ -394,7 +416,9 @@ const styles = StyleSheet.create({
     width: DRAWER_W,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 1,
+    // shadowOpacity is driven by `open.value` via useAnimatedStyle so a
+    // closed drawer leaves zero shadow halo in the visible viewport.
+    shadowOpacity: 0,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 0 },
     elevation: 24,

@@ -30,9 +30,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HamburgerButton } from '@/components/navigation/HamburgerButton';
+import { ComingSoonCard } from '@/components/ui/ComingSoonCard';
 import { ProductCard } from '@/components/storefront/ProductCard';
 import { SmartEmptyState } from '@/components/storefront/SmartEmptyState';
 import { ErrorState, LoadingState } from '@/components/storefront/StateViews';
+import { useComingSoonConfig } from '@/services/comingSoonConfig';
 import {
   clearRecentSearches, logSearch, searchProductsRanked,
   useRecentSearches, useTrendingSearches,
@@ -75,6 +77,7 @@ export default function ShopScreen() {
   const [error, setError] = useState<string | null>(null);
   const trending = useTrendingSearches();
   const { recents, reload: reloadRecents } = useRecentSearches();
+  const comingSoonCfg = useComingSoonConfig();
   const isAr = i18n.language === 'ar';
 
   const usingFilteredView = activeTheme !== 'explorez' || search.trim().length > 0;
@@ -299,23 +302,37 @@ export default function ShopScreen() {
         )
       ) : bucket.deals.length === 0 && bucket.featured.length === 0
           && bucket.newArrivals.length === 0 && bucket.forYou.length === 0 ? (
-        // Phase 1.7 — every bucket is empty (admin hasn't seeded products
-        // yet, or filters returned 0). The legacy code rendered a blank
-        // ScrollView with an 80 px spacer — confusing for the user, who
-        // saw an all-white screen. SmartEmptyState picks up content from
-        // `mobile_empty_states.shop` (admin-managed) and falls back to
-        // a friendly default + smart surfaces (trending / recently
-        // viewed / recommendations) so the screen never goes silent.
-        <SmartEmptyState
-          screen="shop"
-          defaultIcon="storefront-outline"
-          defaultTitle={t('shop.empty_title')}
-          defaultSubtitle={t('shop.empty_subtitle')}
-          forceShowRecentlyViewed
-          forceShowTrending
-          forceShowRecommendations
-          style={{ flex: 1 }}
-        />
+        // Phase 1.7 / Visual polish — all-empty path. Previously rendered
+        // a `SmartEmptyState` only, which meant the user landed on a
+        // sparse "Aucun produit" message with whitespace below it. That
+        // read as a broken / unfinished app on first launch (the most
+        // common case before the admin has seeded a real catalogue).
+        // We now render a friendly bilingual banner ("منتجات جديدة في
+        // طريقها إليك") plus a 2-col grid of 8 ComingSoonCards so the
+        // screen always feels populated. Real products replace the
+        // placeholders cleanly once the admin uploads them.
+        <ScrollView
+          contentContainerStyle={styles.gridScroll}
+          refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+        >
+          <ComingSoonBanner locale={isAr ? 'ar' : 'fr'} />
+          <Text style={[styles.forYouTitle, { textAlign, marginTop: 6 }]}>
+            {t('explore_themes.section_for_you', { defaultValue: isAr ? 'كل المنتجات' : 'Tous les produits' })}
+          </Text>
+          <View style={styles.grid}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <View key={`csc-empty-${i}`} style={styles.gridItem}>
+                <ComingSoonCard
+                  index={i}
+                  locale={isAr ? 'ar' : 'fr'}
+                  width="100%"
+                />
+              </View>
+            ))}
+          </View>
+          <View style={{ height: 80 }} />
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -328,6 +345,8 @@ export default function ShopScreen() {
               tone={Brand.cta}
               products={bucket.deals}
               textAlign={textAlign}
+              minSlots={6}
+              locale={isAr ? 'ar' : 'fr'}
             />
           ) : null}
           {bucket.featured.length > 0 ? (
@@ -336,6 +355,8 @@ export default function ShopScreen() {
               tone={Brand.coral}
               products={bucket.featured}
               textAlign={textAlign}
+              minSlots={6}
+              locale={isAr ? 'ar' : 'fr'}
             />
           ) : null}
           {bucket.newArrivals.length > 0 ? (
@@ -344,6 +365,8 @@ export default function ShopScreen() {
               tone={Brand.fresh}
               products={bucket.newArrivals}
               textAlign={textAlign}
+              minSlots={6}
+              locale={isAr ? 'ar' : 'fr'}
             />
           ) : null}
           {bucket.forYou.length > 0 ? (
@@ -357,6 +380,27 @@ export default function ShopScreen() {
                     <ProductCard product={p} variant="grid" />
                   </View>
                 ))}
+                {/* Pad the grid with ComingSoonCards so the user
+                    never sees a half-row of products with awkward
+                    whitespace below — feels broken on a real
+                    e-commerce app. We pad up to a multiple of 8 (or
+                    at least min_grid_slots from admin config). */}
+                {(() => {
+                  const have = bucket.forYou.length;
+                  const target = Math.max(comingSoonCfg.min_grid_slots, Math.ceil(have / 4) * 4);
+                  const fill = Math.max(0, target - have);
+                  return Array.from({ length: fill }).map((_, i) => (
+                    <View key={`csc-foryou-${i}`} style={styles.gridItem}>
+                      <ComingSoonCard
+                        index={have + i}
+                        locale={isAr ? 'ar' : 'fr'}
+                        width="100%"
+                        titlePool={comingSoonCfg.pool_titles_fr.length > 0 && !isAr ? comingSoonCfg.pool_titles_fr : undefined}
+                        emojiPool={comingSoonCfg.pool_emojis}
+                      />
+                    </View>
+                  ));
+                })()}
               </View>
             </View>
           ) : null}
@@ -368,13 +412,17 @@ export default function ShopScreen() {
 }
 
 function Section({
-  title, tone, products, textAlign,
+  title, tone, products, textAlign, minSlots = 6, locale = 'fr',
 }: {
   title: string;
   tone: string;
   products: ProductWithImages[];
   textAlign: 'left' | 'right' | 'center';
+  /** Pad the rail with ComingSoonCards until it has at least this many. */
+  minSlots?: number;
+  locale?: 'fr' | 'ar';
 }) {
+  const fill = Math.max(0, minSlots - products.length);
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -385,7 +433,38 @@ function Section({
         {products.map((p) => (
           <ProductCard key={p.id} product={p} width={160} />
         ))}
+        {/* Pad the rail with ComingSoonCards so it never feels half-empty
+            (e.g. only 2 deals → 4 placeholders fill the rest). */}
+        {Array.from({ length: fill }).map((_, i) => (
+          <ComingSoonCard
+            key={`csc-rail-${i}`}
+            index={products.length + i}
+            locale={locale}
+            width={160}
+          />
+        ))}
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * ComingSoonBanner — soft pill above the placeholder grid that signals
+ * "real products coming soon". Reads admin-managed text from
+ * `mobile_coming_soon_config.banner_text_*` with safe defaults.
+ */
+function ComingSoonBanner({ locale }: { locale: 'fr' | 'ar' }) {
+  const cfg = useComingSoonConfig();
+  if (!cfg.enabled) return null;
+  const text = (locale === 'ar' ? cfg.banner_text_ar : cfg.banner_text_fr)
+    ?? (locale === 'ar'
+        ? 'منتجات جديدة في طريقها إليك! ترقّبوا...'
+        : 'De nouveaux produits arrivent bientôt !');
+  return (
+    <View style={styles.csBanner}>
+      <Text style={styles.csBannerText}>
+        {cfg.banner_emoji} {text}
+      </Text>
     </View>
   );
 }
@@ -504,4 +583,27 @@ const styles = StyleSheet.create({
   gridScroll: { paddingHorizontal: Spacing.md, paddingBottom: 80 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   gridItem: { flexBasis: '48%', flexGrow: 1, maxWidth: '48%' },
+
+  // Coming-soon banner shown above the placeholder grid when the
+  // catalogue is empty — same purple-tint look as the user's reference
+  // screenshot ("منتجات جديدة في طريقها إليك ! ترقّبوا 🚀").
+  csBanner: {
+    marginTop: 6,
+    marginBottom: 4,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: '#F3EAFE',
+    borderWidth: 1,
+    borderColor: '#DDD0F8',
+    alignItems: 'center',
+  },
+  csBannerText: {
+    fontFamily: BrandFont.bold,
+    fontWeight: '800',
+    fontSize: 13,
+    color: '#5034A8',
+    letterSpacing: 0.1,
+    textAlign: 'center',
+  },
 });

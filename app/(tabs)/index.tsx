@@ -298,8 +298,16 @@ export default function HomeScreen() {
               <PromoSlot slot="seasonal" variant="wide" fallbackTone="blue" />
             </View>
 
-            {/* Nouveautés (2-col grid) */}
-            {data.newArrivals.length > 0 ? (
+            {/* Nouveautés (2-col grid) — Phase placeholder-pass: pad
+                with ComingSoonCards so the grid is always 4 cells (2x2)
+                even when admin only has 1-3 newArrivals seeded (or 0).
+                Without this, a single newArrival rendered as one lonely
+                card with awkward whitespace below, and an all-empty
+                state hid the section entirely — exactly the
+                "half-empty store" feel we're trying to kill. The
+                section now renders whenever the admin enables
+                ComingSoon, so users always see the rhythm of the page. */}
+            {(data.newArrivals.length > 0 || comingSoon.enabled) ? (
               <View style={styles.section}>
                 <SectionHeader
                   title={t('home.section_new')}
@@ -312,6 +320,21 @@ export default function HomeScreen() {
                       <ProductCard product={p} category={catFor(p)} variant="grid" />
                     </View>
                   ))}
+                  {comingSoon.enabled
+                    ? Array.from({
+                        length: Math.max(0, 4 - Math.min(4, data.newArrivals.length)),
+                      }).map((_, i) => (
+                        <View key={`ph-newArrivals-${i}`} style={styles.gridItem}>
+                          <ComingSoonCard
+                            index={data.newArrivals.length + i}
+                            locale={i18n.language === 'ar' ? 'ar' : 'fr'}
+                            width="100%"
+                            titlePool={i18n.language === 'ar' ? comingSoon.pool_titles_ar : comingSoon.pool_titles_fr}
+                            emojiPool={comingSoon.pool_emojis}
+                          />
+                        </View>
+                      ))
+                    : null}
                 </View>
               </View>
             ) : null}

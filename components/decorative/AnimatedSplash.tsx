@@ -35,7 +35,7 @@
  *   `className`, no inline CSS strings.
  */
 import { useEffect, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   runOnJS,
@@ -280,9 +280,21 @@ export function AnimatedSplash({
             {/* Crown */}
             <BounceEmoji emoji="👑" size={28} delay={150} />
 
-            {/* VERKING wordmark — staggered colourful letters */}
+            {/* VERKING wordmark — staggered colourful letters.
+                Belt-and-braces RTL fix: when the device is running in
+                Arabic locale, `flexDirection: 'row'` auto-flips to
+                'row-reverse' and renders V-E-R-K-I-N-G as G-N-I-K-R-E-V.
+                The `direction: 'ltr'` style on logoRow handles this on
+                RN 0.66+, but we *also* reverse the letter ARRAY when
+                I18nManager.isRTL so the visual order is correct even
+                if the runtime ignores `direction`. The per-letter
+                animations still use the original `index` so colours
+                and stagger timing stay in V→G order regardless. */}
             <View style={styles.logoRow}>
-              {LOGO_TEXT.split('').map((letter, i) => (
+              {(I18nManager.isRTL
+                ? LOGO_TEXT.split('').map((letter, i) => ({ letter, i })).reverse()
+                : LOGO_TEXT.split('').map((letter, i) => ({ letter, i }))
+              ).map(({ letter, i }) => (
                 <Letter
                   key={`${letter}-${i}`}
                   letter={letter}
@@ -671,6 +683,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   logoRow: {
+    // CRITICAL: force LTR direction on the wordmark row.
+    // React Native auto-flips `flexDirection: 'row'` to `'row-reverse'`
+    // when `I18nManager.isRTL = true` (Arabic locale), which renders
+    // V-E-R-K-I-N-G as G-N-I-K-R-E-V on Arabic devices. The Latin brand
+    // wordmark must read left-to-right regardless of UI locale, so we
+    // pin `direction: 'ltr'` on this subtree only — taglines below
+    // (Arabic / French) keep the parent's RTL direction intact.
+    direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
