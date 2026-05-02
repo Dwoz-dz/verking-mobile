@@ -20,6 +20,12 @@
 import { installWebStyleShim } from '@/lib/webStyleShim';
 installWebStyleShim();
 
+// Audit 2026-05-02: production monitoring. Sentry init must happen
+// BEFORE any provider that might throw, so the ErrorBoundary upstream
+// in the runtime can capture early-boot crashes.
+import { initMonitoring } from '@/lib/monitoring/sentry';
+initMonitoring();
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import {
   PlusJakartaSans_400Regular,
